@@ -38,6 +38,5 @@ COPY . /app
 
 # 実行ユーザーを app に切り替え（sudo が必要なnmap呼び出しは可能）
 USER ${USER}
-
 # デフォルト起動コマンド
 CMD ["python3", "main.py"]
