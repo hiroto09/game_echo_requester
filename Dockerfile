@@ -1,43 +1,28 @@
-# ベース（適宜バージョン変更可）
+# ベースイメージ
 FROM python:3.11-slim
 
-# 非対話で apt を動かすための設定
-ENV DEBIAN_FRONTEND=noninteractive
-
-# 必要パッケージを入れる（nmap, sudo, build-essential は pip ビルド用保険）
+# nmapインストールに必要なツールを追加
 RUN apt-get update \
- && apt-get install -y --no-install-recommends \
-    nmap \
-    sudo \
-    ca-certificates \
-    gcc \
-    libffi-dev \
-    build-essential \
- && apt-get clean \
- && rm -rf /var/lib/apt/lists/*
+    && apt-get install -y --no-install-recommends nmap sudo \
+    && rm -rf /var/lib/apt/lists/*
 
-# 作業ディレクトリ
+# 作業ディレクトリ設定
 WORKDIR /app
 
-# 非rootユーザーを作成（UIDは任意）
-ARG USER=app
-ARG UID=1000
-RUN useradd -m -u ${UID} -s /bin/bash ${USER}
+# アプリ用ユーザを作成
+RUN useradd -m -u 1000 -s /bin/bash app
 
-# app ユーザーがパスワード無しで nmap を sudo できるように設定
-# /etc/sudoers.d/nmap-runner に権限を書き込む
-RUN echo "${USER} ALL=(ALL) NOPASSWD: /usr/bin/nmap" > /etc/sudoers.d/nmap-runner \
- && chmod 0440 /etc/sudoers.d/nmap-runner
+# sudoでパスワードなしでnmap実行を許可
+RUN echo "app ALL=(ALL) NOPASSWD: /usr/bin/nmap" > /etc/sudoers.d/app
 
-# 依存ファイル（requirements）をコピーしてインストール
-COPY requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r /app/requirements.txt
+# 依存パッケージを直接インストール
+RUN pip install --no-cache-dir requests python-dotenv
 
-# アプリケーションコードをコピー（ローカルの main.py 等を想定）
+# アプリコードをコピー
 COPY . /app
 
-# 実行ユーザーを app に切り替え（sudo が必要なnmap呼び出しは可能）
-USER ${USER}
+# 実行ユーザをappに切り替え
+USER app
 
-# デフォルト起動コマンド
-CMD ["python3", "main.py"]
+# メインスクリプトを実行
+CMD ["python", "main.py"]
