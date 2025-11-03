@@ -59,7 +59,7 @@ def main():
             for i in range(check_count):
                 idx = i + 1
                 status = check_host(target_ip)
-                print(f"[{idx}/{check_count}] {'✅ 起動中' if status else '❌ 停止中'} ({target_ip})")
+                # print(f"[{idx}/{check_count}] {'✅ 起動中' if status else '❌ 停止中'} ({target_ip})")
 
                 if not status:
                     # 停止が見つかった時点で即座に False を送る（前回と異なれば送信）
@@ -67,8 +67,6 @@ def main():
                         print("⚠️ 停止検出 → すぐに False を送信してサイクルをリセットします。")
                         post_status(api_url, False)
                         last_sent_status = False
-                    else:
-                        print("（既に False を送信済みのため再送信しません）")
                     # サイクルをリセット（breakして次サイクルへ）
                     break
                 else:
@@ -82,14 +80,10 @@ def main():
                 # for が break されずに最後まで回った（＝success_count == check_count）
                 if success_count == check_count:
                     if last_sent_status is not True:
-                        print("✅ 20回連続で起動中を確認 → True を送信します。")
                         post_status(api_url, True)
                         last_sent_status = True
-                    else:
-                        print("（既に True を送信済みのため再送信しません）")
 
             # 1サイクル終了 → 次サイクルに移る（即座に開始）
-            print("----- 次サイクルへ -----\n")
 
     except KeyboardInterrupt:
         print("\nユーザーによる中断（Ctrl+C）。終了します。")
