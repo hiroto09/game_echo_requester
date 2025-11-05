@@ -1,9 +1,9 @@
 # ベースイメージ
 FROM python:3.11-slim
 
-# nmapインストールに必要なツールを追加
+# nmap と arping をインストール
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends nmap sudo \
+    && apt-get install -y --no-install-recommends nmap sudo arping \
     && rm -rf /var/lib/apt/lists/*
 
 # 作業ディレクトリ設定
