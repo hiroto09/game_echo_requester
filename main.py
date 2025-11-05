@@ -59,33 +59,48 @@ def main():
     print(f"🎯 監視開始: {target_ip} → {api_url}")
 
     check_count = 6      # 1サイクルあたりのチェック回数
-    interval = 20         # 秒間隔
+    interval = 20        # 秒間隔
     last_sent_status = None
 
     try:
         while True:
             success_count = 0
+            any_failure = False
+
             for i in range(check_count):
                 idx = i + 1
                 print(f"\n[{idx}/{check_count}] 🔍 {target_ip} をスキャン中...")
                 status = check_host(target_ip)
 
                 if not status:
-                    if last_sent_status is not False:
-                        print("⚠️ 停止検出 → False を送信します。")
-                        post_status(api_url, False)
-                        last_sent_status = False
-                    break
+                    any_failure = True
+                    print(f"⚠️ チェック {idx} で失敗を検出しました（このサイクルは継続します）")
+
                 else:
                     success_count += 1
 
+                # サイクル内の最後のチェックでなければ待機
                 if i < check_count - 1:
                     time.sleep(interval)
 
-            else:
-                if success_count == check_count and last_sent_status is not True:
+            # サイクル終了後にまとめて送信判定
+            if success_count == check_count:
+                # 全成功 → True を送る
+                if last_sent_status is not True:
                     post_status(api_url, True)
                     last_sent_status = True
+                else:
+                    print("ℹ️ 全成功だが、前回と同じ True のため送信をスキップします")
+            else:
+                # 1回でも失敗あり → False を送る
+                if last_sent_status is not False:
+                    post_status(api_url, False)
+                    last_sent_status = False
+                else:
+                    print("ℹ️ 失敗検出だが、前回と同じ False のため送信をスキップします")
+
+            # 次サイクルへ（必要ならここで短い待機を入れても良い）
+            # time.sleep(1)
 
     except KeyboardInterrupt:
         print("\n🛑 ユーザー中断（Ctrl+C）。終了します。")
