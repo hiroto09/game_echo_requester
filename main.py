@@ -10,7 +10,7 @@ def check_host(ip: str) -> bool:
     """nmapでホストが起動しているか確認"""
     try:
         result = subprocess.run(
-            ["sudo","nmap", "-sn", ip],
+            ["sudo", "nmap", "-sn", "-Pn", ip],
             capture_output=True,
             text=True,
             timeout=20
@@ -22,6 +22,7 @@ def check_host(ip: str) -> bool:
     except Exception as e:
         print("❌ nmap実行エラー:", e)
         return False
+
 
 def post_status(api_url: str, status: bool) -> bool:
     """APIへPOST。成功したら True を返す"""
@@ -59,7 +60,6 @@ def main():
             for i in range(check_count):
                 idx = i + 1
                 status = check_host(target_ip)
-                # print(f"[{idx}/{check_count}] {'✅ 起動中' if status else '❌ 停止中'} ({target_ip})")
 
                 if not status:
                     # 停止が見つかった時点で即座に False を送る（前回と異なれば送信）
