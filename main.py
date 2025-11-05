@@ -9,7 +9,7 @@ import requests
 load_dotenv()
 
 API_URL = os.getenv("API_URL")
-TARGET_IP = os.getenv("TARGET_IP")
+TARGET_IP = os.getenv("SWITCH_PORT")
 
 SESSION = requests.Session()
 
