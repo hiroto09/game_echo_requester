@@ -10,7 +10,7 @@ def check_host(ip: str) -> bool:
     """nmapでホストが起動しているか確認し、結果をログに出力"""
     try:
         result = subprocess.run(
-            ["sudo", "nmap", "-sn", ip],
+            ["nmap", "-sn", ip],
             capture_output=True,
             text=True,
             timeout=20
