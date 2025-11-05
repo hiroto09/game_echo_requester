@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 def check_host(ip: str) -> bool:
-    """nmapでホストが起動しているか確認"""
+    """nmapでホストが起動しているか確認し、結果をログに出力"""
     try:
         result = subprocess.run(
             ["sudo", "nmap", "-sn", ip],
@@ -15,13 +15,22 @@ def check_host(ip: str) -> bool:
             text=True,
             timeout=20
         )
+
+        # --- ここで nmap の出力をログとして表示 ---
+        print("📄 nmap 出力 --------------------------")
+        print(result.stdout.strip())
+        print("--------------------------------------")
+
+        # "Host is up" が含まれているかで判定
         return "Host is up" in result.stdout
+
     except subprocess.TimeoutExpired:
         print("❌ nmap タイムアウト")
         return False
     except Exception as e:
         print("❌ nmap実行エラー:", e)
         return False
+
 
 def post_status(api_url: str, status: bool) -> bool:
     """APIへPOST。成功したら True を返す"""
@@ -38,6 +47,7 @@ def post_status(api_url: str, status: bool) -> bool:
         print("❌ API送信エラー:", e)
         return False
 
+
 def main():
     api_url = os.getenv("API_URL")
     target_ip = os.getenv("SWITCH_PORT")
@@ -48,45 +58,38 @@ def main():
 
     print(f"🎯 監視開始: {target_ip} → {api_url}")
 
-    check_count = 12      # 1サイクルあたりのチェック回数
-    interval = 10          # 秒間隔（60秒で6回 => 10秒）
-    last_sent_status = None  # 直近で API に送ったステータス（True/False/None）
+    check_count = 6      # 1サイクルあたりのチェック回数
+    interval = 20         # 秒間隔
+    last_sent_status = None
 
     try:
         while True:
             success_count = 0
-            # 1サイクル（最大 check_count 回）
             for i in range(check_count):
                 idx = i + 1
+                print(f"\n[{idx}/{check_count}] 🔍 {target_ip} をスキャン中...")
                 status = check_host(target_ip)
-                # print(f"[{idx}/{check_count}] {'✅ 起動中' if status else '❌ 停止中'} ({target_ip})")
 
                 if not status:
-                    # 停止が見つかった時点で即座に False を送る（前回と異なれば送信）
                     if last_sent_status is not False:
-                        print("⚠️ 停止検出 → すぐに False を送信してサイクルをリセットします。")
+                        print("⚠️ 停止検出 → False を送信します。")
                         post_status(api_url, False)
                         last_sent_status = False
-                    # サイクルをリセット（breakして次サイクルへ）
                     break
                 else:
                     success_count += 1
 
-                # 最後のチェックでは sleep しない
                 if i < check_count - 1:
                     time.sleep(interval)
 
             else:
-                # for が break されずに最後まで回った（＝success_count == check_count）
-                if success_count == check_count:
-                    if last_sent_status is not True:
-                        post_status(api_url, True)
-                        last_sent_status = True
-
-            # 1サイクル終了 → 次サイクルに移る（即座に開始）
+                if success_count == check_count and last_sent_status is not True:
+                    post_status(api_url, True)
+                    last_sent_status = True
 
     except KeyboardInterrupt:
-        print("\nユーザーによる中断（Ctrl+C）。終了します。")
+        print("\n🛑 ユーザー中断（Ctrl+C）。終了します。")
+
 
 if __name__ == "__main__":
     main()
