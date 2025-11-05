@@ -1,42 +1,66 @@
+
 import subprocess
 import os
 import time
 import requests
 from dotenv import load_dotenv
+from datetime import datetime
 
+# .env 読み込み
 load_dotenv()
 
+# グローバルな requests セッション（接続プールを再利用）
+SESSION = requests.Session()
+
+def nowstr() -> str:
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
 def check_host(ip: str) -> bool:
-    """nmapでホストが起動しているか確認"""
+    """
+    nmap -sn -Pn を使ってホストが起動しているか確認する。
+    戻り値: True == Host is up, False == Host down or error
+    """
     try:
+        # -sn : host discovery only
+        # -Pn : skip host discovery ping probes (we rely on ARP/other LAN-level checks)
+        # -n option could be added to skip DNS resolution if desired.
+        cmd = ["nmap", "-sn", "-Pn", ip]
         result = subprocess.run(
-            ["sudo", "nmap", "-sn", "-Pn", ip],
+            cmd,
             capture_output=True,
             text=True,
-            timeout=20
+            timeout=25  # nmapの実行が長引かないようにタイムアウト
         )
-        return "Host is up" in result.stdout
+        out = result.stdout or ""
+        # デバッグ出力（必要なら有効に）
+        # print(out)
+        up = "Host is up" in out
+        return up
     except subprocess.TimeoutExpired:
-        print("❌ nmap タイムアウト")
+        print(f"{nowstr()} ❌ nmap タイムアウト")
+        return False
+    except FileNotFoundError:
+        print(f"{nowstr()} ❌ nmap が見つかりません。nmap をインストールしてください。")
         return False
     except Exception as e:
-        print("❌ nmap実行エラー:", e)
+        print(f"{nowstr()} ❌ nmap 実行エラー: {e}")
         return False
 
-
 def post_status(api_url: str, status: bool) -> bool:
-    """APIへPOST。成功したら True を返す"""
+    """
+    APIへPOST送信。成功なら True を返す。
+    """
     payload = {"status": status}
     try:
-        resp = requests.post(api_url, json=payload, timeout=10)
+        resp = SESSION.post(api_url, json=payload, timeout=10)
         if resp.status_code == 200:
-            print(f"📡 API送信成功: {status}")
+            print(f"{nowstr()} 📡 API送信成功: {status}")
             return True
         else:
-            print(f"⚠️ API送信失敗: {resp.status_code} - {resp.text}")
+            print(f"{nowstr()} ⚠️ API送信失敗: {resp.status_code} - {resp.text}")
             return False
     except requests.RequestException as e:
-        print("❌ API送信エラー:", e)
+        print(f"{nowstr()} ❌ API送信エラー: {e}")
         return False
 
 def main():
@@ -44,14 +68,24 @@ def main():
     target_ip = os.getenv("SWITCH_PORT")
 
     if not api_url or not target_ip:
-        print("⚠️ API_URL または SWITCH_PORT が未設定です")
+        print("⚠️ API_URL または SWITCH_PORT が未設定です（.env を確認してください）")
         return
 
-    print(f"🎯 監視開始: {target_ip} → {api_url}")
+    # オプションの環境変数（未指定時はデフォルト値を使う）
+    try:
+        check_count = int(os.getenv("CHECK_COUNT", "20"))
+    except ValueError:
+        check_count = 20
 
-    check_count = 20      # 1サイクルあたりのチェック回数
-    interval = 3          # 秒間隔（60秒で20回 => 3秒）
-    last_sent_status = None  # 直近で API に送ったステータス（True/False/None）
+    try:
+        interval = float(os.getenv("INTERVAL", "3"))
+    except ValueError:
+        interval = 3.0
+
+    print(f"{nowstr()} 🎯 監視開始: {target_ip} → {api_url}")
+    print(f"{nowstr()}   check_count={check_count}, interval={interval}s")
+
+    last_sent_status = None  # 直近でAPIに送信したステータスを保持（True/False/None）
 
     try:
         while True:
@@ -60,13 +94,16 @@ def main():
             for i in range(check_count):
                 idx = i + 1
                 status = check_host(target_ip)
+                print(f"{nowstr()} [{idx}/{check_count}] {'✅ 起動中' if status else '❌ 停止中'} ({target_ip})")
 
                 if not status:
                     # 停止が見つかった時点で即座に False を送る（前回と異なれば送信）
                     if last_sent_status is not False:
-                        print("⚠️ 停止検出 → すぐに False を送信してサイクルをリセットします。")
+                        print(f"{nowstr()} ⚠️ 停止検出 → すぐに False を送信しサイクルをリセットします。")
                         post_status(api_url, False)
                         last_sent_status = False
+                    else:
+                        print(f"{nowstr()} （既に False を送信済みのため再送しません）")
                     # サイクルをリセット（breakして次サイクルへ）
                     break
                 else:
@@ -80,13 +117,17 @@ def main():
                 # for が break されずに最後まで回った（＝success_count == check_count）
                 if success_count == check_count:
                     if last_sent_status is not True:
+                        print(f"{nowstr()} ✅ {check_count}回連続で起動中を確認 → True を送信します。")
                         post_status(api_url, True)
                         last_sent_status = True
+                    else:
+                        print(f"{nowstr()} （既に True を送信済みのため再送信しません）")
 
-            # 1サイクル終了 → 次サイクルに移る（即座に開始）
+            # 次サイクルへ（即座に開始）
+            print(f"{nowstr()} ----- 次サイクルへ -----\n")
 
     except KeyboardInterrupt:
-        print("\nユーザーによる中断（Ctrl+C）。終了します。")
+        print(f"\n{nowstr()} ユーザーによる中断（Ctrl+C）です。終了します。")
 
 if __name__ == "__main__":
     main()
