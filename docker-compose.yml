@@ -1,11 +1,18 @@
+version: "3.8"
+
 services:
-  arping-watcher:
+  nmap-watcher:
     build: .
-    container_name: arping-watcher
+    container_name: nmap-watcher
+    # .env を読み込ませる（docker-compose は自動で .env を読み込むが明示マウント）
     env_file:
       - .env
+    # ソースをボリュームマウントしてホットリロードしやすく（開発向け）
     volumes:
       - ./:/app:rw
     restart: unless-stopped
-    network_mode: "host"  # arpingで必要
+    # ホストネットワークを使うとホストと同じネットワーク空間でスキャン可能（Linux推奨）
+    # 注意: macOS の Docker Desktop では host モードは制限があります
+    network_mode: "host"
+    # ログを見やすくするため tty を ON にする（任意）
     tty: true
