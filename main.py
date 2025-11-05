@@ -15,39 +15,16 @@ def nowstr() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 def check_host(ip: str) -> bool:
-    """
-    arping を使ってホストが起動しているか確認する。
-    戻り値: True == Host is up, False == Host down or error
-    """
+    """arpingで生存確認"""
     try:
-        # macOS では sudo が必要な場合あり → 必要ならコメント解除
-        cmd = ["arping", "-c", "1", "-w", "1", ip]
-        # cmd = ["sudo", "arping", "-c", "1", "-w", "1", ip]  # macOSで必要ならこちら
-
         result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=5
+            ["sudo", "arping", "-c", "3", ip],
+            capture_output=True, text=True, timeout=5
         )
-
-        out = result.stdout.lower() + result.stderr.lower()
-
-        # "bytes from" が含まれる場合は応答あり（upと判断）
-        if "bytes from" in out or "reply" in out:
-            return True
-        return False
-
-    except subprocess.TimeoutExpired:
-        print(f"{nowstr()} ❌ arping タイムアウト")
-        return False
-    except FileNotFoundError:
-        print(f"{nowstr()} ❌ arping が見つかりません。インストールしてください。")
-        return False
+        return result.returncode == 0
     except Exception as e:
-        print(f"{nowstr()} ❌ arping 実行エラー: {e}")
+        print(f"[{nowstr()}] Error: {e}")
         return False
-
 
 def post_status(api_url: str, status: bool) -> bool:
     """
@@ -65,7 +42,6 @@ def post_status(api_url: str, status: bool) -> bool:
     except requests.RequestException as e:
         print(f"{nowstr()} ❌ API送信エラー: {e}")
         return False
-
 
 def main():
     api_url = os.getenv("API_URL")
@@ -101,22 +77,15 @@ def main():
                     print(f"{nowstr()} ✅ {check_count}回連続で起動中を確認 → True を送信します。")
                     post_status(api_url, True)
                     last_sent_status = True
-                # else:
-                #     print(f"{nowstr()} （既に True を送信済みのため再送信しません）")
             else:
                 # 1回でも落ちたら False を送信
                 if last_sent_status is not False:
                     print(f"{nowstr()} ⚠️ 起動中でない回が存在 → False を送信します。")
                     post_status(api_url, False)
                     last_sent_status = False
-                # else:
-                #     print(f"{nowstr()} （既に False を送信済みのため再送信しません）")
-
-            # print(f"{nowstr()} ----- 次サイクルへ -----\n")
 
     except KeyboardInterrupt:
         print(f"\n{nowstr()} ユーザーによる中断（Ctrl+C）です。終了します。")
-
 
 if __name__ == "__main__":
     main()
