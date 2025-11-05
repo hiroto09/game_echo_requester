@@ -89,7 +89,7 @@ def main():
             for i in range(check_count):
                 idx = i + 1
                 status = check_host(target_ip)
-                # print(f"{nowstr()} [{idx}/{check_count}] {'✅ 起動中' if status else '❌ 停止中'} ({target_ip})")
+                print(f"{nowstr()} [{idx}/{check_count}] {'✅ 起動中' if status else '❌ 停止中'} ({target_ip})")
 
                 if status:
                     success_count += 1
