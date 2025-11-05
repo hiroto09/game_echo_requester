@@ -71,16 +71,8 @@ def main():
         print("⚠️ API_URL または SWITCH_PORT が未設定です（.env を確認してください）")
         return
 
-    # オプションの環境変数（未指定時はデフォルト値を使う）
-    try:
-        check_count = int(os.getenv("CHECK_COUNT", "20"))
-    except ValueError:
-        check_count = 20
-
-    try:
-        interval = float(os.getenv("INTERVAL", "3"))
-    except ValueError:
-        interval = 3.0
+    check_count = 12
+    interval = 10  # 秒
 
     print(f"{nowstr()} 🎯 監視開始: {target_ip} → {api_url}")
     print(f"{nowstr()}   check_count={check_count}, interval={interval}s")
