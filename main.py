@@ -1,38 +1,30 @@
 import subprocess
-import os
 import time
-import requests
+import os
 from dotenv import load_dotenv
 from datetime import datetime
+import requests
 
 # .env 読み込み
 load_dotenv()
 
-# グローバルな requests セッション（接続プールを再利用）
+API_URL = os.getenv("API_URL")
+TARGET_IP = os.getenv("TARGET_IP")
+
 SESSION = requests.Session()
 
-def nowstr() -> str:
+def nowstr():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-def check_host(ip: str) -> bool:
-    """arpingで生存確認"""
-    try:
-        result = subprocess.run(
-            ["sudo", "arping", "-c", "3", ip],
-            capture_output=True, text=True, timeout=5
-        )
-        return result.returncode == 0
-    except Exception as e:
-        print(f"[{nowstr()}] Error: {e}")
+def post_status(status: bool):
+    """APIへ状態をPOST送信"""
+    if not API_URL:
+        print(f"{nowstr()} ⚠️ API_URLが設定されていません")
         return False
 
-def post_status(api_url: str, status: bool) -> bool:
-    """
-    APIへPOST送信。成功なら True を返す。
-    """
     payload = {"status": status}
     try:
-        resp = SESSION.post(api_url, json=payload, timeout=10)
+        resp = SESSION.post(API_URL, json=payload, timeout=10)
         if resp.status_code == 200:
             print(f"{nowstr()} 📡 API送信成功: {status}")
             return True
@@ -43,49 +35,55 @@ def post_status(api_url: str, status: bool) -> bool:
         print(f"{nowstr()} ❌ API送信エラー: {e}")
         return False
 
-def main():
-    api_url = os.getenv("API_URL")
-    target_ip = os.getenv("SWITCH_PORT")
-
-    if not api_url or not target_ip:
-        print("⚠️ API_URL または SWITCH_PORT が未設定です（.env を確認してください）")
-        return
-
-    check_count = 12
-    interval = 10  # 秒
-
-    print(f"{nowstr()} 🎯 監視開始: {target_ip} → {api_url}")
-    print(f"{nowstr()}   check_count={check_count}, interval={interval}s")
-
-    last_sent_status = None
-
+def check_host(ip: str) -> bool:
+    """arpingで応答確認"""
     try:
-        while True:
-            success_count = 0
-            for i in range(check_count):
-                idx = i + 1
-                status = check_host(target_ip)
-                print(f"{nowstr()} [{idx}/{check_count}] {'✅ 起動中' if status else '❌ 停止中'} ({target_ip})")
+        result = subprocess.run(
+            ["arping", "-c", "3", ip],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        return result.returncode == 0
+    except Exception as e:
+        print(f"{nowstr()} arpingエラー: {e}")
+        return False
 
-                if status:
-                    success_count += 1
-                time.sleep(interval)
+def main():
+    print(f"{nowstr()} 🛰️ 監視開始 ({TARGET_IP}) → {API_URL}")
+    check_count = 12
+    interval = 10  # 秒（12回 × 10秒 = 120秒 = 2分）
 
-            # すべて起動中なら True を送信
-            if success_count == check_count:
-                if last_sent_status is not True:
-                    print(f"{nowstr()} ✅ {check_count}回連続で起動中を確認 → True を送信します。")
-                    post_status(api_url, True)
-                    last_sent_status = True
-            else:
-                # 1回でも落ちたら False を送信
-                if last_sent_status is not False:
-                    print(f"{nowstr()} ⚠️ 起動中でない回が存在 → False を送信します。")
-                    post_status(api_url, False)
-                    last_sent_status = False
+    last_status = None
 
-    except KeyboardInterrupt:
-        print(f"\n{nowstr()} ユーザーによる中断（Ctrl+C）です。終了します。")
+    while True:
+        success_count = 0
+
+        for i in range(check_count):
+            status = check_host(TARGET_IP)
+            print(f"{nowstr()} [{i+1}/{check_count}] {'✅ 起動中' if status else '❌ 停止中'} ({TARGET_IP})")
+
+            if status:
+                success_count += 1
+
+            time.sleep(interval)
+
+        # 12回すべて成功
+        if success_count == check_count:
+            current_status = True
+            print(f"{nowstr()} ✅ {check_count}回すべて成功 → 起動中")
+        else:
+            current_status = False
+            print(f"{nowstr()} ⚠️ {check_count}回中 {success_count}回のみ成功 → 停止中")
+
+        # 状態が変化したときのみAPI送信
+        if current_status != last_status:
+            post_status(current_status)
+            last_status = current_status
+        else:
+            print(f"{nowstr()} 🔁 状態に変化なし → API送信スキップ")
+
+        print(f"{nowstr()} ----- 次サイクルへ -----\n")
 
 if __name__ == "__main__":
     main()

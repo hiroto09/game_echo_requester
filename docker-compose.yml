@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   arping-watcher:
     build: .
@@ -9,5 +7,5 @@ services:
     volumes:
       - ./:/app:rw
     restart: unless-stopped
-    network_mode: "host"
+    network_mode: "host"  # arpingで必要
     tty: true
