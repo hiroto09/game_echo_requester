@@ -17,9 +17,9 @@ def check_host(ip: str) -> bool:
         )
 
         # --- ここで nmap の出力をログとして表示 ---
-        print("📄 nmap 出力 --------------------------")
-        print(result.stdout.strip())
-        print("--------------------------------------")
+        # print("📄 nmap 出力 --------------------------")
+        # print(result.stdout.strip())
+        # print("--------------------------------------")
 
         # "Host is up" が含まれているかで判定
         return "Host is up" in result.stdout
@@ -38,7 +38,6 @@ def post_status(api_url: str, status: bool) -> bool:
     try:
         resp = requests.post(api_url, json=payload, timeout=10)
         if resp.status_code == 200:
-            print(f"📡 API送信成功: {status}")
             return True
         else:
             print(f"⚠️ API送信失敗: {resp.status_code} - {resp.text}")
@@ -69,12 +68,10 @@ def main():
 
             for i in range(check_count):
                 idx = i + 1
-                print(f"\n[{idx}/{check_count}] 🔍 {target_ip} をスキャン中...")
                 status = check_host(target_ip)
 
                 if not status:
                     any_failure = True
-                    print(f"⚠️ チェック {idx} で失敗を検出しました（このサイクルは継続します）")
 
                 else:
                     success_count += 1
