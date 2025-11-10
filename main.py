@@ -38,6 +38,7 @@ def post_status(api_url: str, status: bool) -> bool:
     try:
         resp = requests.post(api_url, json=payload, timeout=10)
         if resp.status_code == 200:
+            print(f"📡 API送信成功: {status}")
             return True
         else:
             print(f"⚠️ API送信失敗: {resp.status_code} - {resp.text}")
