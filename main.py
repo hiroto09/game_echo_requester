@@ -38,10 +38,8 @@ def post_status(api_url: str, status: bool) -> bool:
     try:
         resp = requests.post(api_url, json=payload, timeout=10)
         if resp.status_code == 200:
-            print(f"📡 API送信成功: {status}")
             return True
         else:
-            print(f"⚠️ API送信失敗: {resp.status_code} - {resp.text}")
             return False
     except requests.RequestException as e:
         print("❌ API送信エラー:", e)
@@ -87,19 +85,11 @@ def main():
                 if last_sent_status is not True:
                     post_status(api_url, True)
                     last_sent_status = True
-                else:
-                    print("ℹ️ 全成功だが、前回と同じ True のため送信をスキップします")
             else:
                 # 1回でも失敗あり → False を送る
                 if last_sent_status is not False:
                     post_status(api_url, False)
                     last_sent_status = False
-                else:
-                    print("ℹ️ 失敗検出だが、前回と同じ False のため送信をスキップします")
-
-            # 次サイクルへ（必要ならここで短い待機を入れても良い）
-            # time.sleep(1)
-
     except KeyboardInterrupt:
         print("\n🛑 ユーザー中断（Ctrl+C）。終了します。")
 
