@@ -9,3 +9,6 @@ restart:
 
 logs:
 	docker compose logs -f
+	
+clean:
+	docker compose down --rmi all --volumes --remove-orphans
