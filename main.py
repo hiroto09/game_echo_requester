@@ -1,14 +1,26 @@
 import subprocess
 import os
 import time
-import requests
+import threading
+
+from fastapi import FastAPI
 from dotenv import load_dotenv
-from datetime import datetime
+import uvicorn
 
 load_dotenv()
 
+app = FastAPI()
+
+# =========================
+# 現在のSwitch起動状態
+# =========================
+packet_status = False
+
+
+# =========================
+# nmapでホスト確認
+# =========================
 def check_host(ip: str) -> bool:
-    """nmapでホストが起動しているか確認"""
     try:
         result = subprocess.run(
             ["nmap", "-sn", ip],
@@ -16,77 +28,73 @@ def check_host(ip: str) -> bool:
             text=True,
             timeout=20
         )
+
         return "Host is up" in result.stdout
 
     except subprocess.TimeoutExpired:
         print("❌ nmap タイムアウト")
         return False
+
     except Exception as e:
         print("❌ nmap実行エラー:", e)
         return False
 
 
-def post_status(api_url: str, status: bool) -> bool:
-    """APIへPOST"""
-    try:
-        resp = requests.post(
-            api_url,
-            json={"status": status},
-            timeout=10
-        )
-        return resp.status_code == 200
-    except requests.RequestException as e:
-        print("❌ API送信エラー:", e)
-        return False
+# =========================
+# バックグラウンド監視
+# =========================
+def monitor():
 
+    global packet_status
 
-def log_status(status: bool):
-    """状態切り替わり時のみログ出力"""
-    now = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
-    if status:
-        print(f"🟢 [{now}] 在室を検知（Switch ON）")
-    else:
-        print(f"🔴 [{now}] 不在を検知（Switch OFF）")
-
-
-def main():
-    api_url = os.getenv("API_URL")
     target_ip = os.getenv("SWITCH_PORT")
 
-    if not api_url or not target_ip:
-        print("⚠️ API_URL または SWITCH_PORT が未設定です")
+    if not target_ip:
+        print("⚠️ SWITCH_PORT が設定されていません")
         return
 
-    print(f"🎯 監視開始: {target_ip} → {api_url}")
+    print(f"🎯 監視開始 : {target_ip}")
 
-    check_count = 6   # 1サイクルあたりのチェック回数
-    interval = 20     # 秒間隔
+    check_count = 6
+    interval = 20
 
-    last_sent_status = None  # ← 前回確定した状態
+    while True:
 
-    try:
-        while True:
-            success_count = 0
+        success_count = 0
 
-            for i in range(check_count):
-                if check_host(target_ip):
-                    success_count += 1
+        for i in range(check_count):
 
-                if i < check_count - 1:
-                    time.sleep(interval)
+            if check_host(target_ip):
+                success_count += 1
 
-            # ---- サイクル結果の確定状態 ----
-            current_status = (success_count == check_count)
+            if i < check_count - 1:
+                time.sleep(interval)
 
-            # ---- 状態が切り替わったときのみ ----
-            if current_status != last_sent_status:
-                log_status(current_status)
-                post_status(api_url, current_status)
-                last_sent_status = current_status
+        packet_status = (success_count == check_count)
 
-    except KeyboardInterrupt:
-        print("\n🛑 ユーザー中断（Ctrl+C）。終了します。")
+        print("Switch:", "ON" if packet_status else "OFF")
 
 
+# =========================
+# GET API
+# =========================
+@app.get("/packet")
+async def get_packet():
+    return {
+        "packet": packet_status
+    }
+
+
+# =========================
+# メイン
+# =========================
 if __name__ == "__main__":
-    main()
+
+    thread = threading.Thread(target=monitor, daemon=True)
+    thread.start()
+
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=8000
+    )
